@@ -1,6 +1,5 @@
 package com.example.zumoappname;
 
-import static com.microsoft.windowsazure.mobileservices.MobileServiceQueryOperations.*;
 
 import java.net.MalformedURLException;
 import java.util.List;
@@ -15,15 +14,20 @@ import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.ProgressBar;
 
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import com.microsoft.windowsazure.mobileservices.MobileServiceClient;
-import com.microsoft.windowsazure.mobileservices.MobileServiceTable;
-import com.microsoft.windowsazure.mobileservices.NextServiceFilterCallback;
-import com.microsoft.windowsazure.mobileservices.ServiceFilter;
-import com.microsoft.windowsazure.mobileservices.ServiceFilterRequest;
-import com.microsoft.windowsazure.mobileservices.ServiceFilterResponse;
-import com.microsoft.windowsazure.mobileservices.ServiceFilterResponseCallback;
-import com.microsoft.windowsazure.mobileservices.TableOperationCallback;
-import com.microsoft.windowsazure.mobileservices.TableQueryCallback;
+import com.microsoft.windowsazure.mobileservices.http.NextServiceFilterCallback;
+import com.microsoft.windowsazure.mobileservices.http.ServiceFilter;
+import com.microsoft.windowsazure.mobileservices.http.ServiceFilterRequest;
+import com.microsoft.windowsazure.mobileservices.http.ServiceFilterResponse;
+import com.microsoft.windowsazure.mobileservices.table.MobileServiceTable;
+import com.microsoft.windowsazure.mobileservices.table.TableOperationCallback;
+import com.microsoft.windowsazure.mobileservices.table.TableQueryCallback;
+
+import static com.microsoft.windowsazure.mobileservices.table.query.QueryOperations.*;
 
 public class ToDoActivity extends Activity {
 
@@ -236,31 +240,42 @@ public class ToDoActivity extends Activity {
 	private class ProgressFilter implements ServiceFilter {
 		
 		@Override
-		public void handleRequest(ServiceFilterRequest request, NextServiceFilterCallback nextServiceFilterCallback,
-				final ServiceFilterResponseCallback responseCallback) {
-			runOnUiThread(new Runnable() {
+		public ListenableFuture<ServiceFilterResponse> handleRequest(ServiceFilterRequest request, NextServiceFilterCallback nextServiceFilterCallback) {
+
+            final SettableFuture<ServiceFilterResponse> resultFuture = SettableFuture.create();
+
+
+            runOnUiThread(new Runnable() {
 
 				@Override
 				public void run() {
-					if (mProgressBar != null) mProgressBar.setVisibility(ProgressBar.VISIBLE);
+                if (mProgressBar != null) mProgressBar.setVisibility(ProgressBar.VISIBLE);
 				}
 			});
-			
-			nextServiceFilterCallback.onNext(request, new ServiceFilterResponseCallback() {
-				
-				@Override
-				public void onResponse(ServiceFilterResponse response, Exception exception) {
-					runOnUiThread(new Runnable() {
 
-						@Override
-						public void run() {
-							if (mProgressBar != null) mProgressBar.setVisibility(ProgressBar.GONE);
-						}
-					});
-					
-					if (responseCallback != null)  responseCallback.onResponse(response, exception);
-				}
-			});
+            ListenableFuture<ServiceFilterResponse> future = nextServiceFilterCallback.onNext(request);
+
+            Futures.addCallback(future, new FutureCallback<ServiceFilterResponse>() {
+                @Override
+                public void onFailure(Throwable e) {
+                    resultFuture.setException(e);
+                }
+
+                @Override
+                public void onSuccess(ServiceFilterResponse response) {
+                    runOnUiThread(new Runnable() {
+
+                        @Override
+                        public void run() {
+                            if (mProgressBar != null) mProgressBar.setVisibility(ProgressBar.GONE);
+                        }
+                    });
+
+                    resultFuture.set(response);
+                }
+            });
+
+            return resultFuture;
 		}
 	}
 }
